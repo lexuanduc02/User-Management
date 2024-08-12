@@ -11,7 +11,7 @@ namespace App.Infrastructure.EntityConfigurations
             builder.ToTable("Users");
             builder.HasKey(x => x.Id);
             builder.Property(x => x.Email).IsRequired();
-            builder.Property(x => x.Username).IsRequired();
+            builder.Property(x => x.UserName).IsRequired();
         }
     }
 }
