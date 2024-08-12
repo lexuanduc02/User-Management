@@ -2,6 +2,7 @@
 using App.Application.Extensions;
 using App.Application.UseCases.Contracts;
 using App.Common.Bases;
+using App.Common.Models.Common;
 using App.Common.Models.User.Dtos;
 using App.Common.Models.User.Request;
 using App.Common.Models.User.Result;
@@ -20,7 +21,7 @@ namespace App.Application.UseCases
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<BaseResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request)
+        public async Task<BaseResponse<Guid>> ChangePasswordAsync(ChangePasswordRequest request)
         {
             try
             {
@@ -29,35 +30,14 @@ namespace App.Application.UseCases
                 var user = await _unitOfWork.UserRepository.FindAsync(x => x.Email == request.Email);
 
                 if (user == null)
-                {
-                    return new BaseResponse<bool>()
-                    {
-                        Message = "Thông tin người dùng không tồn tại!",
-                        Success = false,
-                        StatusCode = 404,
-                    };
-                }
+                    return BaseResponse<Guid>.CreateErrorResponse(404, "Không tìm thấy thông tin!");
 
                 var checkCurrentPassword = PasswordExtension.VerifyPassword(request.CurrentPassword, user.Password, user.Salt);
                 if (!checkCurrentPassword)
-                {
-                    return new BaseResponse<bool>()
-                    {
-                        Message = "Mật khẩu không chính xác!",
-                        Success = false,
-                        StatusCode = 400,
-                    };
-                }
+                    return BaseResponse<Guid>.CreateErrorResponse("Mật khẩu không chính xác!");
 
-                if(!(request.NewPassword == request.ConfirmPassword))
-                {
-                    return new BaseResponse<bool>()
-                    {
-                        Message = "Mật khẩu mới không khớp!",
-                        Success = false,
-                        StatusCode = 400,
-                    };
-                }
+                if (!(request.NewPassword == request.ConfirmPassword))
+                    return BaseResponse<Guid>.CreateErrorResponse("Mật khẩu không khớp!");
 
                 var salt = PasswordExtension.GenerateSalt();
                 user.Salt = salt;
@@ -65,23 +45,12 @@ namespace App.Application.UseCases
 
                 await _unitOfWork.SaveChangesAsync();
 
-                return new BaseResponse<bool>()
-                {
-                    Message = "Đổi mật khẩu thành công!",
-                    Success = true,
-                    StatusCode = 202,
-                };
+                return BaseResponse<Guid>.CreateSuccessResponse("Đổi mật khẩu thành công!");
             }
             catch (Exception)
             {
                 await _unitOfWork.CancelAsync();
-                return new BaseResponse<bool>()
-                {
-                    Message = "Mật khẩu mới không khớp!",
-                    Success = false,
-                    StatusCode = 400,
-                };
-                throw;
+                return BaseResponse<Guid>.CreateErrorResponse("Đổi mật khẩu thất bại!");
             }
         }
 
@@ -92,14 +61,7 @@ namespace App.Application.UseCases
                 var isExist = await _unitOfWork.UserRepository.IsExistAsync(x => x.UserName == request.UserName || x.Email == request.Email);
 
                 if (isExist)
-                {
-                    return new BaseResponse<UserViewModel>()
-                    {
-                        Message = "Thông tin người dùng đã tồn tại!",
-                        Success = false,
-                        StatusCode = 400,
-                    };
-                }
+                    return BaseResponse<UserViewModel>.CreateErrorResponse("Thông tin đã được đăng ký!");
 
                 string salt = PasswordExtension.GenerateSalt();
 
@@ -116,45 +78,109 @@ namespace App.Application.UseCases
                 await _unitOfWork.UserRepository.AddAsync(user);
                 await _unitOfWork.SaveChangesAsync();
 
-                return new BaseResponse<UserViewModel>()
+                var data = new UserViewModel()
                 {
-                    Message = "Tạo người dùng thành công",
-                    Success = true,
-                    StatusCode = 201,
-                    Data = new UserViewModel()
-                    {
-                        UserName = user.UserName,
-                        FullName= user.UserName,
-                        Id = user.Id,
-                        Email = user.Email,
-                    }
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    Email = user.Email,
+                    FullName = user.UserName,
                 };
+
+                return BaseResponse<UserViewModel>.CreateSuccessResponse(201, data, "Thêm mới thành công!");
             }
             catch (Exception)
             {
                 await _unitOfWork.CancelAsync();
-                return new BaseResponse<UserViewModel>()
-                {
-                    Message = "Đăng ký người dùng không thành công!",
-                    Success = false,
-                    StatusCode = 400,
-                };
+                return BaseResponse<UserViewModel>.CreateErrorResponse("Thêm mới thất bại!");
             }
         }
 
-        public Task<BaseResponse<bool>> DeleteAsync(string UserId)
+        public async Task<BaseResponse<Guid>> DeleteAsync(string userId)
         {
-            throw new NotImplementedException();
+            try
+            {
+                await _unitOfWork.BeginTransactionAsync();
+
+                var user = await _unitOfWork.UserRepository.GetByIdAsync(Guid.Parse(userId));
+
+                if(user == null)
+                    return BaseResponse<Guid>.CreateErrorResponse(404, "Không tìm thấy thông tin!");
+
+                _unitOfWork.UserRepository.Delete(user);
+                await _unitOfWork.SaveChangesAsync();
+
+                return BaseResponse<Guid>.CreateSuccessResponse("Xóa thành công!");
+            }
+            catch (Exception)
+            {
+                await _unitOfWork.CancelAsync();
+                return BaseResponse<Guid>.CreateErrorResponse("Xóa không thành công!");
+            }
         }
 
-        public Task<BaseResponse<IEnumerable<UserViewModel>>> GetAllAsync()
+        public async Task<BaseResponse<PagedList<UserViewModel>>> GetAllAsync(GetListRequest request)
         {
-            throw new NotImplementedException();
+            try
+            {
+                var query = await _unitOfWork.UserRepository.GetAllAsync();
+
+                if(query == null)
+                    return BaseResponse<PagedList<UserViewModel>>.CreateErrorResponse("Lấy danh sách không thành công!");
+
+                if (request.Keyword != null)
+                {
+                    query = query.Where(x => x.FullName.Contains(request.Keyword));
+                }
+
+                var data = query.Skip((request.PageIndex - 1) * request.PageSize).Take(request.PageSize)
+                    .Select(x => new UserViewModel()
+                    {
+                        Email = x.Email,
+                        UserName = x.UserName,
+                        FullName = x.UserName,
+                        Id = x.Id,
+                    }).ToList();
+
+                var totalCount = query.Count();
+                var totalPage = (int)Math.Ceiling((double)totalCount / request.PageSize);
+                var result = new PagedList<UserViewModel>()
+                {
+                    CurrentPage = request.PageIndex,
+                    TotalPage = totalPage,
+                    TotalCount = totalCount,
+                    Items = data
+                };
+
+                return BaseResponse<PagedList<UserViewModel>>.CreateSuccessResponse(result, "Lấy danh sách thành công!");
+            }
+            catch (Exception)
+            {
+                return BaseResponse<PagedList<UserViewModel>>.CreateErrorResponse("Lấy danh sách không thành công!");
+            }
         }
 
-        public Task<BaseResponse<UserViewModel>> GetAsync()
+        public async Task<BaseResponse<UserViewModel>> GetAsync(string userId)
         {
-            throw new NotImplementedException();
+            try
+            {
+                var user = await _unitOfWork.UserRepository.GetByIdAsync(Guid.Parse(userId));
+                if(user == null)
+                    return BaseResponse<UserViewModel>.CreateErrorResponse(404, "Không tìm thấy thông tin!");
+
+                var data = new UserViewModel()
+                {
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    FullName = user.FullName,
+                    Email = user.Email,
+                };
+
+                return BaseResponse<UserViewModel>.CreateSuccessResponse(data, "Lấy thông tin thành công!");
+            }
+            catch (Exception)
+            {
+                return BaseResponse<UserViewModel>.CreateErrorResponse(404, "Không tìm thấy thông tin!");
+            }
         }
 
         public async Task<BaseResponse<LoginResult>> LoginAsync(LoginRequest request, IConfiguration configuration)
@@ -164,26 +190,12 @@ namespace App.Application.UseCases
                 var user = await _unitOfWork.UserRepository.FindAsync(x => x.UserName == request.UserName);
 
                 if (user == null)
-                {
-                    return new BaseResponse<LoginResult>()
-                    {
-                        Message = "Thông tin người dùng không tồn tại!",
-                        Success = false,
-                        StatusCode = 404,
-                    };
-                }
+                    return BaseResponse<LoginResult>.CreateErrorResponse(404, "Không tìm thấy thông tin!");
 
                 var checkPassword = PasswordExtension.VerifyPassword(request.Password, user.Password, user.Salt);
 
                 if (!checkPassword)
-                {
-                    return new BaseResponse<LoginResult>()
-                    {
-                        Message = "Mật khẩu không chính xác!",
-                        Success = false,
-                        StatusCode = 400,
-                    };
-                }
+                    return BaseResponse<LoginResult>.CreateErrorResponse("Mật khẩu không đúng!");
 
                 // Tạo danh sách claims cho token
                 var claims = new List<Claim>
@@ -202,36 +214,52 @@ namespace App.Application.UseCases
                 var accessToken = TokenExtensions.GenerateAccessToken(claims, issuer, audience, key, expireIn);
 
                 if (accessToken == null)
-                {
-                    return new BaseResponse<LoginResult>()
-                    {
-                        Message = "Đăng nhập thất bại!",
-                        Success = false,
-                        StatusCode = 400,
-                    };
-                }
+                    return BaseResponse<LoginResult>.CreateErrorResponse("Đăng nhập thất bại");
 
-                return new BaseResponse<LoginResult>()
+                var data = new LoginResult()
                 {
-                    Message = "Đăng nhập thành công",
-                    Success = true,
-                    StatusCode = 200,
-                    Data = new LoginResult()
-                    {
-                        AccessToken = accessToken,
-                        ExpireIn = expireIn,
-                    }
+                    AccessToken = accessToken,
+                    ExpireIn = expireIn,
                 };
 
+                return BaseResponse<LoginResult>.CreateSuccessResponse(data, "Đăng nhập thành công!");
             }
             catch (Exception)
             {
-                return new BaseResponse<LoginResult>()
+                return BaseResponse<LoginResult>.CreateErrorResponse("Đăng nhập thất bại");
+            }
+        }
+
+        public async Task<BaseResponse<UserViewModel>> UpdateAsync(UpdateUserRequest request)
+        {
+            try
+            {
+                var user = _unitOfWork.UserRepository.GetById(request.Id);
+
+                if(user == null)
+                    return BaseResponse<UserViewModel>.CreateErrorResponse(404, "Không tìm thấy thông tin");
+
+                user.UserName = request.UserName;
+                user.Email = request.Email;
+                user.FullName = request.FullName;
+
+                await _unitOfWork.BeginTransactionAsync();
+                await _unitOfWork.SaveChangesAsync();
+
+                var data = new UserViewModel()
                 {
-                    Message = "Đăng nhập thất bại!",
-                    Success = false,
-                    StatusCode = 400,
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    FullName = user.FullName,
+                    Email = user.Email
                 };
+
+                return BaseResponse<UserViewModel>.CreateSuccessResponse(data, "Cập nhật thành công!");
+            }
+            catch (Exception)
+            {
+                await _unitOfWork.CancelAsync();
+                return BaseResponse<UserViewModel>.CreateErrorResponse("Cập nhật thất bại!");
             }
         }
     }
