@@ -6,5 +6,11 @@ namespace App.Common.Models.User.Request
     {
         [Required]
         public string Email { get; set; }
+        [Required]
+        public string CurrentPassword { get; set; }
+        [Required]
+        public string NewPassword { get; set; }
+        [Required]
+        public string ConfirmPassword { get; set; }
     }
 }

@@ -1,5 +1,5 @@
-﻿using App.Application.Services;
-using App.Application.Services.Contracts;
+﻿using App.Application.UseCases;
+using App.Application.UseCases.Contracts;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

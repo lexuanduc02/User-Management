@@ -4,7 +4,7 @@ using App.Common.Models.User.Request;
 using App.Common.Models.User.Result;
 using Microsoft.Extensions.Configuration;
 
-namespace App.Application.Services.Contracts
+namespace App.Application.UseCases.Contracts
 {
     public interface IUserService
     {
