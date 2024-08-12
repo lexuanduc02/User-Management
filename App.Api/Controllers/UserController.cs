@@ -1,4 +1,4 @@
-﻿using App.Application.Services.Contracts;
+﻿using App.Application.UseCases.Contracts;
 using App.Common.Models.User.Request;
 using Microsoft.AspNetCore.Mvc;
 
@@ -29,6 +29,14 @@ namespace App.Api.Controllers
         public async Task<IActionResult> Login([FromBody] LoginRequest payload)
         {
             var result = await _userService.LoginAsync(payload, _configuration);
+
+            return Ok(result);
+        }
+
+        [HttpPut("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest payload)
+        {
+            var result = await _userService.ChangePasswordAsync(payload);
 
             return Ok(result);
         }

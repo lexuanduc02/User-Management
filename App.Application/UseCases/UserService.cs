@@ -1,18 +1,15 @@
 ﻿using App.Application.Contracts.Infrastructure.UnitOfWork;
-using App.Application.Services.Contracts;
+using App.Application.Extensions;
+using App.Application.UseCases.Contracts;
 using App.Common.Bases;
 using App.Common.Models.User.Dtos;
 using App.Common.Models.User.Request;
-using App.Domain.Entities;
-using App.Application.Extensions;
 using App.Common.Models.User.Result;
+using App.Domain.Entities;
 using Microsoft.Extensions.Configuration;
-using System.Data;
 using System.Security.Claims;
-using System.Text;
-using System.Net;
 
-namespace App.Application.Services
+namespace App.Application.UseCases
 {
     public class UserService : IUserService
     {
@@ -23,9 +20,69 @@ namespace App.Application.Services
             _unitOfWork = unitOfWork;
         }
 
-        public Task<BaseResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request)
+        public async Task<BaseResponse<bool>> ChangePasswordAsync(ChangePasswordRequest request)
         {
-            throw new NotImplementedException();
+            try
+            {
+                await _unitOfWork.BeginTransactionAsync();
+
+                var user = await _unitOfWork.UserRepository.FindAsync(x => x.Email == request.Email);
+
+                if (user == null)
+                {
+                    return new BaseResponse<bool>()
+                    {
+                        Message = "Thông tin người dùng không tồn tại!",
+                        Success = false,
+                        StatusCode = 404,
+                    };
+                }
+
+                var checkCurrentPassword = PasswordExtension.VerifyPassword(request.CurrentPassword, user.Password, user.Salt);
+                if (!checkCurrentPassword)
+                {
+                    return new BaseResponse<bool>()
+                    {
+                        Message = "Mật khẩu không chính xác!",
+                        Success = false,
+                        StatusCode = 400,
+                    };
+                }
+
+                if(!(request.NewPassword == request.ConfirmPassword))
+                {
+                    return new BaseResponse<bool>()
+                    {
+                        Message = "Mật khẩu mới không khớp!",
+                        Success = false,
+                        StatusCode = 400,
+                    };
+                }
+
+                var salt = PasswordExtension.GenerateSalt();
+                user.Salt = salt;
+                user.Password = PasswordExtension.HashPassword(request.NewPassword, salt);
+
+                await _unitOfWork.SaveChangesAsync();
+
+                return new BaseResponse<bool>()
+                {
+                    Message = "Đổi mật khẩu thành công!",
+                    Success = true,
+                    StatusCode = 202,
+                };
+            }
+            catch (Exception)
+            {
+                await _unitOfWork.CancelAsync();
+                return new BaseResponse<bool>()
+                {
+                    Message = "Mật khẩu mới không khớp!",
+                    Success = false,
+                    StatusCode = 400,
+                };
+                throw;
+            }
         }
 
         public async Task<BaseResponse<UserViewModel>> CreateUserAsync(CreateUserRequest request)
@@ -112,7 +169,7 @@ namespace App.Application.Services
                     {
                         Message = "Thông tin người dùng không tồn tại!",
                         Success = false,
-                        StatusCode = 400,
+                        StatusCode = 404,
                     };
                 }
 
@@ -157,7 +214,7 @@ namespace App.Application.Services
                 return new BaseResponse<LoginResult>()
                 {
                     Message = "Đăng nhập thành công",
-                    Success = false,
+                    Success = true,
                     StatusCode = 200,
                     Data = new LoginResult()
                     {
