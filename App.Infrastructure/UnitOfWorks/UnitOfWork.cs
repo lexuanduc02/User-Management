@@ -1,5 +1,7 @@
-﻿using App.Application.Contracts.Infrastructure.UnitOfWork;
+﻿using App.Application.Contracts.Infrastructure.Repositories;
+using App.Application.Contracts.Infrastructure.UnitOfWork;
 using App.Infrastructure.Context;
+using App.Infrastructure.Repositories;
 using System.Data.Common;
 
 namespace App.Infrastructure.UnitOfWork
@@ -11,19 +13,18 @@ namespace App.Infrastructure.UnitOfWork
         public UnitOfWork(DataContext context)
         {
             _context = context;
+            UserRepository = new UserRepository(context);
         }
+
+        public IUserRepository UserRepository { get; }
 
         public Task BeginTransactionAsync()
         {
-            // we can use context.Database.BeginTransaction(), but since this is an UoW, we just silently discard changes if SaveChangesAsync is not called
-
             return Task.CompletedTask;
         }
 
         public Task CancelAsync()
         {
-            // we can use transaction.Commit(), but since this is an UoW, we just silently discard changes if SaveChangesAsync is not called
-
             return Task.CompletedTask;
         }
 

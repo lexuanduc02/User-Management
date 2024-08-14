@@ -1,6 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using App.Infrastructure.EntityConfigurations;
+using Microsoft.EntityFrameworkCore;
 using System.Data.Common;
-using System.Reflection;
 
 namespace App.Infrastructure.Context
 {
@@ -15,7 +15,7 @@ namespace App.Infrastructure.Context
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
-            builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+            builder.ApplyConfiguration(new UserConfiguration());
         }
 
         public DbConnection GetDbConnect()
