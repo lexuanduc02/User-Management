@@ -148,7 +148,8 @@ namespace App.Application.UseCases
                     CurrentPage = request.PageIndex,
                     TotalPage = totalPage,
                     TotalCount = totalCount,
-                    Items = data
+                    Items = data,
+                    PageSize = request.PageSize,
                 };
 
                 return BaseResponse<PagedList<UserViewModel>>.Success(result, "Lấy danh sách thành công!");
@@ -218,8 +219,18 @@ namespace App.Application.UseCases
 
                 var data = new LoginResult()
                 {
-                    AccessToken = accessToken,
-                    ExpireIn = expireIn,
+                    UserInfor = new UserViewModel()
+                    {
+                        Id = user.Id,
+                        UserName = user.UserName,
+                        Email = user.Email,
+                        FullName = user.FullName,
+                    },
+                    Token = new Token()
+                    {
+                        AccessToken = accessToken,
+                        ExpireIn = expireIn,
+                    }
                 };
 
                 return BaseResponse<LoginResult>.Success(data, "Đăng nhập thành công!");
